@@ -8,6 +8,7 @@ import minimatch from "minimatch";
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
 const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL");
+const CUSTOM_PROMPT: string = core.getInput("prompt");
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
@@ -79,14 +80,15 @@ async function analyzeCode(
 }
 
 function createPrompt(file: File, chunk: Chunk, prDetails: PRDetails): string {
-  return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
-- Do not give positive comments or compliments.
-- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
-- Write the comment in GitHub Markdown format.
-- Use the given description only for the overall context and only comment the code.
-- IMPORTANT: NEVER suggest adding comments to the code.
-
+  const defaultPrompt = `Your task is to review pull requests. Instructions:
+                        - Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+                        - Do not give positive comments or compliments.
+                        - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+                        - Write the comment in GitHub Markdown format.
+                        - Use the given description only for the overall context and only comment the code.
+                        - IMPORTANT: NEVER suggest adding comments to the code.`
+  const prompt = CUSTOM_PROMPT ? CUSTOM_PROMPT : defaultPrompt
+  return `${prompt}
 Review the following code diff in the file "${
     file.to
   }" and take the pull request title and description into account when writing the response.
