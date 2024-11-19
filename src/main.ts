@@ -158,10 +158,16 @@ async function getAIResponse(prompt: string): Promise<Array<{
 
     // console.log("Response received from OpenAI:\n", response); // Log phản hồi thô từ OpenAI
 
+    const removeMarkdown = (input : any) => {
+      return input.replace(/```json([\s\S]*?)```/g, '$1').trim();
+    };
+    
     const res = response.choices[0].message?.content?.trim() || "{}";
 
     try {
-      const parsedResponse = JSON.parse(res);
+
+      
+      const parsedResponse = JSON.parse(removeMarkdown(res));
       console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
       return parsedResponse.reviews;
     } catch (jsonError) {

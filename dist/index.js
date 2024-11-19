@@ -171,9 +171,12 @@ function getAIResponse(prompt) {
                     },
                 ] }));
             // console.log("Response received from OpenAI:\n", response); // Log phản hồi thô từ OpenAI
+            const removeMarkdown = (input) => {
+                return input.replace(/```json([\s\S]*?)```/g, '$1').trim();
+            };
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             try {
-                const parsedResponse = JSON.parse(res);
+                const parsedResponse = JSON.parse(removeMarkdown(res));
                 console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
                 return parsedResponse.reviews;
             }
