@@ -126,9 +126,10 @@ async function getAIResponse(prompt: string): Promise<Array<{
   };
 
   try {
+    console.log("Prompt sent to OpenAI:\n", prompt); // Log prompt gửi đến OpenAI
+
     const response = await openai.chat.completions.create({
       ...queryConfig,
-      // return JSON if the model supports it:
       ...(OPENAI_API_MODEL === "gpt-4-1106-preview"
         ? { response_format: { type: "json_object" } }
         : {}),
@@ -140,10 +141,20 @@ async function getAIResponse(prompt: string): Promise<Array<{
       ],
     });
 
+    console.log("Response received from OpenAI:\n", response); // Log phản hồi thô từ OpenAI
+
     const res = response.choices[0].message?.content?.trim() || "{}";
-    return JSON.parse(res).reviews;
+
+    try {
+      const parsedResponse = JSON.parse(res);
+      console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
+      return parsedResponse.reviews;
+    } catch (jsonError) {
+      console.error("Error parsing JSON response:", res); // Log lỗi JSON không hợp lệ
+      throw new Error(`Invalid JSON format received: ${res}`);
+    }
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error calling OpenAI API:", error); // Log lỗi từ OpenAI API
     return null;
   }
 }
