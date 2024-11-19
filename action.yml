@@ -11,6 +11,10 @@ inputs:
     description: "OpenAI API model."
     required: false
     default: "gpt-4"
+  prompt:
+    description: "This is a command for instructing AI to review code with the intended purpose without using the default approach."
+    required: false
+    default: ""
   exclude:
     description: "Glob patterns to exclude files from the diff analysis"
     required: false
