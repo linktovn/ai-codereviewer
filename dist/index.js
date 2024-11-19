@@ -211,13 +211,36 @@ function createComment(file, chunk, aiResponses) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
-        yield octokit.pulls.createReview({
-            owner,
-            repo,
-            pull_number,
-            comments,
-            event: "COMMENT",
+        const { data: commits } = yield octokit.pulls.listCommits({
+            owner: owner,
+            repo: repo,
+            pull_number: pull_number,
         });
+        const commitId = commits[commits.length - 1].sha; // ID của commit mới nhất
+        for (const comment of comments) {
+            try {
+                yield octokit.pulls.createReviewComment({
+                    commit_id: commitId,
+                    owner: owner,
+                    repo: repo,
+                    pull_number: pull_number,
+                    body: comment.body,
+                    path: comment.path,
+                    line: comment.line,
+                });
+            }
+            catch (error) {
+                console.error("Error submitting comment:", comment, error);
+                continue; // Skip invalid comments
+            }
+        }
+        // await octokit.pulls.createReview({
+        //   ,
+        //   ,
+        //   ,
+        //   comments,
+        //   event: "COMMENT",
+        // });
     });
 }
 function main() {
@@ -261,18 +284,9 @@ function main() {
         });
         const comments = yield analyzeCode(filteredDiff, prDetails);
         if (comments.length > 0) {
-            const limitedComments = limitComments(comments);
-            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, limitedComments);
+            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
         }
     });
-}
-const MAX_COMMENTS = 10;
-function limitComments(comments) {
-    if (comments.length > MAX_COMMENTS) {
-        console.warn(`Limiting comments to ${MAX_COMMENTS}`);
-        return comments.slice(0, MAX_COMMENTS);
-    }
-    return comments;
 }
 main().catch((error) => {
     console.error("Error:", error);

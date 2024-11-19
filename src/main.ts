@@ -217,13 +217,36 @@ async function createReviewComment(
   pull_number: number,
   comments: Array<{ body: string; path: string; line: number }>
 ): Promise<void> {
-  await octokit.pulls.createReview({
-    owner,
-    repo,
-    pull_number,
-    comments,
-    event: "COMMENT",
+  const { data: commits } = await octokit.pulls.listCommits({
+    owner: owner,
+    repo: repo,
+    pull_number: pull_number,
   });
+  
+  const commitId = commits[commits.length - 1].sha; // ID của commit mới nhất
+  for (const comment of comments) {
+    try {
+      await octokit.pulls.createReviewComment({
+        commit_id: commitId, 
+        owner: owner,
+        repo: repo,
+        pull_number: pull_number,
+        body: comment.body,
+        path: comment.path,
+        line: comment.line,
+      });
+    } catch (error) {
+      console.error("Error submitting comment:", comment, error);
+      continue; // Skip invalid comments
+    }
+  }
+  // await octokit.pulls.createReview({
+  //   ,
+  //   ,
+  //   ,
+  //   comments,
+  //   event: "COMMENT",
+  // });
 }
 
 async function main() {
@@ -276,21 +299,16 @@ async function main() {
       minimatch(file.to ?? "", pattern)
     );
   });
-
+  
   const comments = await analyzeCode(filteredDiff, prDetails);
   if (comments.length > 0) {
-    const limitedComments = limitComments(comments);
-    await createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, limitedComments);
+    await createReviewComment(
+      prDetails.owner,
+      prDetails.repo,
+      prDetails.pull_number,
+      comments
+    );
   }
-}
-const MAX_COMMENTS = 10;
-
-function limitComments(comments: Array<{ body: string; path: string; line: number }>): Array<{ body: string; path: string; line: number }> {
-  if (comments.length > MAX_COMMENTS) {
-    console.warn(`Limiting comments to ${MAX_COMMENTS}`);
-    return comments.slice(0, MAX_COMMENTS);
-  }
-  return comments;
 }
 
 main().catch((error) => {
