@@ -108,13 +108,14 @@ function analyzeCode(parsedDiff, prDetails) {
 }
 function createPrompt(file, chunk, prDetails) {
     const defaultPrompt = `Your task is to review pull requests. Instructions:
-                        - Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
                         - Do not give positive comments or compliments.
                         - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
                         - Write the comment in GitHub Markdown format.
                         - Use the given description only for the overall context and only comment the code.
                         - IMPORTANT: NEVER suggest adding comments to the code.`;
-    const prompt = CUSTOM_PROMPT ? CUSTOM_PROMPT : defaultPrompt;
+    const prompt = `${CUSTOM_PROMPT ? CUSTOM_PROMPT : defaultPrompt}
+                  - Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+                  `;
     return `${prompt}
 Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
   
