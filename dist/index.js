@@ -90,16 +90,31 @@ function analyzeCode(parsedDiff, prDetails) {
     return __awaiter(this, void 0, void 0, function* () {
         const comments = [];
         for (const file of parsedDiff) {
-            if (file.to === "/dev/null")
-                continue; // Ignore deleted files
+            if (!file.to || file.to === "/dev/null") {
+                console.warn(`Skipping deleted or invalid file: ${file.to}`);
+                continue; // Ignore deleted or invalid files
+            }
             for (const chunk of file.chunks) {
                 const prompt = createPrompt(file, chunk, prDetails);
-                const aiResponse = yield getAIResponse(prompt);
-                if (aiResponse) {
-                    const newComments = createComment(file, chunk, aiResponse);
-                    if (newComments) {
-                        comments.push(...newComments);
+                try {
+                    // Get AI response
+                    const aiResponse = yield getAIResponse(prompt);
+                    if (aiResponse) {
+                        // Create comments from AI responses
+                        const newComments = createComment(file, chunk, aiResponse);
+                        if (newComments.length > 0) {
+                            comments.push(...newComments);
+                        }
+                        else {
+                            console.warn(`No valid comments created for file: ${file.to}, chunk: ${chunk.content}`);
+                        }
                     }
+                    else {
+                        console.warn(`AI response is null or empty for file: ${file.to}`);
+                    }
+                }
+                catch (error) {
+                    console.error(`Error processing file: ${file.to}, chunk: ${chunk.content}, Error:`, error);
                 }
             }
         }
@@ -149,7 +164,7 @@ function getAIResponse(prompt) {
             presence_penalty: 0,
         };
         try {
-            console.log("Prompt sent to OpenAI:\n", prompt); // Log prompt gửi đến OpenAI
+            // console.log("Prompt sent to OpenAI:\n", prompt); // Log prompt gửi đến OpenAI
             const response = yield openai.chat.completions.create(Object.assign(Object.assign(Object.assign({}, queryConfig), (OPENAI_API_MODEL === "gpt-4-1106-preview"
                 ? { response_format: { type: "json_object" } }
                 : {})), { messages: [
@@ -158,7 +173,7 @@ function getAIResponse(prompt) {
                         content: prompt,
                     },
                 ] }));
-            console.log("Response received from OpenAI:\n", response); // Log phản hồi thô từ OpenAI
+            // console.log("Response received from OpenAI:\n", response); // Log phản hồi thô từ OpenAI
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             try {
                 const parsedResponse = JSON.parse(res);
@@ -178,9 +193,18 @@ function getAIResponse(prompt) {
 }
 function createComment(file, chunk, aiResponses) {
     return aiResponses.flatMap((aiResponse) => {
+        // Nếu không có đường dẫn file, bỏ qua
         if (!file.to) {
+            console.error("File path is missing for a diff chunk.");
             return [];
         }
+        // Kiểm tra xem lineNumber có nằm trong đoạn diff (hunk) hay không
+        const isValidLineNumber = chunk.changes.some((change) => change.ln === Number(aiResponse.lineNumber) || change.ln2 === Number(aiResponse.lineNumber));
+        if (!isValidLineNumber) {
+            console.error(`Invalid lineNumber ${aiResponse.lineNumber} for file ${file.to}. Line does not exist in the diff hunk.`);
+            return [];
+        }
+        // Tạo comment nếu hợp lệ
         return {
             body: aiResponse.reviewComment,
             path: file.to,
