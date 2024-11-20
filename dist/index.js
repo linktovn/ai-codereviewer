@@ -481,34 +481,30 @@ function createComment(file, chunk, aiResponses) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
-        yield octokit.pulls.createReview({
+        const { data: commits } = yield octokit.pulls.listCommits({
             owner,
             repo,
             pull_number,
-            comments,
-            event: "COMMENT",
         });
-        // const { data: commits } = await octokit.pulls.listCommits({
-        //   owner,
-        //   repo,
-        //   pull_number,
-        // });
-        // const commitId = commits[commits.length - 1].sha;
-        // for (const comment of comments) {
-        //   try {
-        //     await octokit.pulls.createReviewComment({
-        //       owner,
-        //       repo,
-        //       pull_number,
-        //       commit_id: commitId,
-        //       body: comment.body,
-        //       path: comment.path,
-        //       line: comment.line,
-        //     });
-        //   } catch (error) {
-        //     console.error("Error submitting comment:", comment, error);
-        //   }
-        // }
+        const commitId = commits[commits.length - 1].sha;
+        for (const comment of comments) {
+            try {
+                requestQueue.add(() => __awaiter(this, void 0, void 0, function* () {
+                    yield octokit.pulls.createReviewComment({
+                        owner,
+                        repo,
+                        pull_number,
+                        commit_id: commitId,
+                        body: comment.body,
+                        path: comment.path,
+                        line: comment.line,
+                    });
+                }));
+            }
+            catch (error) {
+                console.error("Error submitting comment:", comment, error);
+            }
+        }
     });
 }
 function main() {

@@ -518,36 +518,30 @@ async function createReviewComment(
   pull_number: number,
   comments: Array<{ body: string; path: string; line: number }>
 ): Promise<void> {
-  await octokit.pulls.createReview({
+  const { data: commits } = await octokit.pulls.listCommits({
     owner,
     repo,
     pull_number,
-    comments,
-    event: "COMMENT",
   });
-  // const { data: commits } = await octokit.pulls.listCommits({
-  //   owner,
-  //   repo,
-  //   pull_number,
-  // });
-  // const commitId = commits[commits.length - 1].sha;
+  const commitId = commits[commits.length - 1].sha;
 
-  // for (const comment of comments) {
-  //   try {
-  //     await octokit.pulls.createReviewComment({
-  //       owner,
-  //       repo,
-  //       pull_number,
-  //       commit_id: commitId,
-  //       body: comment.body,
-  //       path: comment.path,
-  //       line: comment.line,
-  //     });
-  //   } catch (error) {
-  //     console.error("Error submitting comment:", comment, error);
-  //   }
-  // }
-  
+  for (const comment of comments) {
+    try {
+      requestQueue.add(async () => {
+        await octokit.pulls.createReviewComment({
+          owner,
+          repo,
+          pull_number,
+          commit_id: commitId,
+          body: comment.body,
+          path: comment.path,
+          line: comment.line,
+        });
+      });
+    } catch (error) {
+      console.error("Error submitting comment:", comment, error);
+    }
+  }
 }
 
 async function main() {
