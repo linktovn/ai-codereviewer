@@ -320,12 +320,11 @@
 //   console.error("Error:", error);
 //   process.exit(1);
 // });
-import { readFileSync } from "fs";
 import * as core from "@actions/core";
-import OpenAI from "openai";
 import { Octokit } from "@octokit/rest";
+import { readFileSync } from "fs";
+import OpenAI from "openai";
 import parseDiff, { Chunk, File } from "parse-diff";
-import minimatch from "minimatch";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -360,7 +359,6 @@ class RequestQueue {
 
   private async processQueue() {
     if (this.active || this.queue.length === 0) return;
-
     this.active = true;
     const request = this.queue.shift();
     if (request) {
@@ -426,6 +424,7 @@ async function analyzeCode(
       const prompt = createPrompt(file, chunk, prDetails);
 
       try {
+        console.log("Prompt send to AI :" + prompt);
         const aiResponse = await getAIResponse(prompt);
         if (aiResponse) {
           const newComments = createComment(file, chunk, aiResponse);
@@ -498,19 +497,40 @@ async function getAIResponse(prompt: string): Promise<Array<{
 
 
 function createComment(
-  file: File,
-  chunk: Chunk,
-  aiResponses: Array<{
-    lineNumber: string;
-    reviewComment: string;
-  }>
-): Array<{ body: string; path: string; line: number }> {
-  return aiResponses.map((aiResponse) => ({
-    body: aiResponse.reviewComment,
-    path: file.to || "",
-    line: Number(aiResponse.lineNumber),
-  }));
-}
+    file: File,
+    chunk: Chunk,
+    aiResponses: Array<{
+      lineNumber: string;
+      reviewComment: string;
+    }>
+  ): Array<{ body: string; path: string; line: number }> {
+    return aiResponses.flatMap((aiResponse) => {
+      // Bỏ qua nếu `file.to` không tồn tại
+      if (!file.to) {
+        console.warn(`Skipping invalid file path: ${file.to}`);
+        return [];
+      }
+  
+      // Xác nhận `lineNumber` có tồn tại trong `chunk.changes`
+      const isValidLineNumber = chunk.changes.some(
+        (change: { ln?: number; ln2?: number; content: string }) =>
+          change.ln === Number(aiResponse.lineNumber) || change.ln2 === Number(aiResponse.lineNumber)
+      );
+  
+      if (!isValidLineNumber) {
+        console.warn(
+          `Invalid lineNumber ${aiResponse.lineNumber} for file ${file.to}. It does not exist in the diff hunk.`
+        );
+        return [];
+      }
+  
+      return {
+        body: aiResponse.reviewComment,
+        path: file.to,
+        line: Number(aiResponse.lineNumber),
+      };
+    });
+  }
 
 async function createReviewComment(
   owner: string,
@@ -524,7 +544,6 @@ async function createReviewComment(
     pull_number,
   });
   const commitId = commits[commits.length - 1].sha;
-
   for (const comment of comments) {
     try {
       requestQueue.add(async () => {

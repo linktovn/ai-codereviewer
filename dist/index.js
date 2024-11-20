@@ -322,10 +322,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 //   console.error("Error:", error);
 //   process.exit(1);
 // });
-const fs_1 = __nccwpck_require__(7147);
 const core = __importStar(__nccwpck_require__(2186));
-const openai_1 = __importDefault(__nccwpck_require__(47));
 const rest_1 = __nccwpck_require__(5375);
+const fs_1 = __nccwpck_require__(7147);
+const openai_1 = __importDefault(__nccwpck_require__(47));
 const parse_diff_1 = __importDefault(__nccwpck_require__(4833));
 const GITHUB_TOKEN = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY = core.getInput("OPENAI_API_KEY");
@@ -408,6 +408,7 @@ function analyzeCode(parsedDiff, prDetails) {
             for (const chunk of file.chunks) {
                 const prompt = createPrompt(file, chunk, prDetails);
                 try {
+                    console.log("Prompt send to AI :" + prompt);
                     const aiResponse = yield getAIResponse(prompt);
                     if (aiResponse) {
                         const newComments = createComment(file, chunk, aiResponse);
@@ -473,11 +474,24 @@ function getAIResponse(prompt) {
     });
 }
 function createComment(file, chunk, aiResponses) {
-    return aiResponses.map((aiResponse) => ({
-        body: aiResponse.reviewComment,
-        path: file.to || "",
-        line: Number(aiResponse.lineNumber),
-    }));
+    return aiResponses.flatMap((aiResponse) => {
+        // Bỏ qua nếu `file.to` không tồn tại
+        if (!file.to) {
+            console.warn(`Skipping invalid file path: ${file.to}`);
+            return [];
+        }
+        // Xác nhận `lineNumber` có tồn tại trong `chunk.changes`
+        const isValidLineNumber = chunk.changes.some((change) => change.ln === Number(aiResponse.lineNumber) || change.ln2 === Number(aiResponse.lineNumber));
+        if (!isValidLineNumber) {
+            console.warn(`Invalid lineNumber ${aiResponse.lineNumber} for file ${file.to}. It does not exist in the diff hunk.`);
+            return [];
+        }
+        return {
+            body: aiResponse.reviewComment,
+            path: file.to,
+            line: Number(aiResponse.lineNumber),
+        };
+    });
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
