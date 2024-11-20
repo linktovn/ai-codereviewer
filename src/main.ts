@@ -467,9 +467,6 @@ async function getAIResponse(prompt: string): Promise<Array<{
   };
 
   try {
-    // Log nội dung prompt gửi tới OpenAI
-    console.log("Prompt sent to OpenAI:\n", prompt);
-
     const response = await openai.chat.completions.create({
       ...queryConfig,
       messages: [
@@ -479,7 +476,6 @@ async function getAIResponse(prompt: string): Promise<Array<{
         },
       ],
     });
-
     // Log phản hồi từ OpenAI trước khi xử lý
     const removeMarkdown = (input: any) => {
       return input.replace(/```json([\s\S]*?)```/g, '$1').trim();

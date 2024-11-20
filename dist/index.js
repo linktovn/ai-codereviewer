@@ -446,8 +446,6 @@ function getAIResponse(prompt) {
             presence_penalty: 0,
         };
         try {
-            // Log nội dung prompt gửi tới OpenAI
-            console.log("Prompt sent to OpenAI:\n", prompt);
             const response = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages: [
                     {
                         role: "system",
