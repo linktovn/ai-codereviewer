@@ -424,8 +424,9 @@ async function analyzeCode(
       const prompt = createPrompt(file, chunk, prDetails);
 
       try {
-        console.log("Prompt send to AI :" + prompt);
+        
         const aiResponse = await getAIResponse(prompt);
+        console.log("AI response :" + JSON.stringify(aiResponse));
         if (aiResponse) {
           const newComments = createComment(file, chunk, aiResponse);
           comments.push(...newComments);
