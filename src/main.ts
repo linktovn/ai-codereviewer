@@ -481,8 +481,6 @@ async function getAIResponse(prompt: string): Promise<Array<{
     });
 
     // Log phản hồi từ OpenAI trước khi xử lý
-    console.log("Response received from OpenAI:\n", response);
-
     const removeMarkdown = (input: any) => {
       return input.replace(/```json([\s\S]*?)```/g, '$1').trim();
     };
@@ -491,7 +489,6 @@ async function getAIResponse(prompt: string): Promise<Array<{
 
     try {
       const parsedResponse = JSON.parse(removeMarkdown(res));
-      console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
       return parsedResponse.reviews;
     } catch (jsonError) {
       console.error("Error parsing JSON response:", res); // Log lỗi JSON không hợp lệ
@@ -525,9 +522,6 @@ async function createReviewComment(
   pull_number: number,
   comments: Array<{ body: string; path: string; line: number }>
 ): Promise<void> {
-  console.log(`Creating review comments for PR: ${pull_number}`);
-  console.log(`Number of comments: ${comments.length}`);
-  
   const { data: commits } = await octokit.pulls.listCommits({
     owner,
     repo,
@@ -536,7 +530,6 @@ async function createReviewComment(
   const commitId = commits[commits.length - 1].sha;
   
   for (const comment of comments) {
-    console.log(`Adding comment: ${comment.body} on line ${comment.line}`);
     try {
       await octokit.pulls.createReviewComment({
         owner,
