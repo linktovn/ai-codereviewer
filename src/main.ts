@@ -139,9 +139,15 @@ async function getAIResponse(prompt: string): Promise<Array<{
     model: OPENAI_API_MODEL,
     temperature: 0.2,
     max_tokens: 700,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
   };
 
   try {
+    // Log nội dung prompt gửi tới OpenAI
+    console.log("Prompt sent to OpenAI:\n", prompt);
+
     const response = await openai.chat.completions.create({
       ...queryConfig,
       messages: [
@@ -152,13 +158,29 @@ async function getAIResponse(prompt: string): Promise<Array<{
       ],
     });
 
+    // Log phản hồi từ OpenAI trước khi xử lý
+    console.log("Response received from OpenAI:\n", response);
+
+    const removeMarkdown = (input: any) => {
+      return input.replace(/```json([\s\S]*?)```/g, '$1').trim();
+    };
+
     const res = response.choices[0].message?.content?.trim() || "{}";
-    return JSON.parse(res).reviews;
+
+    try {
+      const parsedResponse = JSON.parse(removeMarkdown(res));
+      console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
+      return parsedResponse.reviews;
+    } catch (jsonError) {
+      console.error("Error parsing JSON response:", res); // Log lỗi JSON không hợp lệ
+      throw new Error(`Invalid JSON format received: ${res}`);
+    }
   } catch (error) {
-    console.error("Error calling OpenAI API:", error);
+    console.error("Error calling OpenAI API:", error); // Log lỗi từ OpenAI API
     return null;
   }
 }
+
 
 function createComment(
   file: File,
@@ -181,25 +203,31 @@ async function createReviewComment(
   pull_number: number,
   comments: Array<{ body: string; path: string; line: number }>
 ): Promise<void> {
-  const { data: commits } = await octokit.pulls.listCommits({
-    owner: owner,
-    repo: repo,
-    pull_number: pull_number,
-  });
+  console.log(`Creating review comments for PR: ${pull_number}`);
+  console.log(`Number of comments: ${comments.length}`);
   
-  const commitId = commits[commits.length - 1].sha; // ID của commit mới nhất
+  const { data: commits } = await octokit.pulls.listCommits({
+    owner,
+    repo,
+    pull_number,
+  });
+  const commitId = commits[commits.length - 1].sha;
+  
   for (const comment of comments) {
-    requestQueue.add(async () => {
+    console.log(`Adding comment: ${comment.body} on line ${comment.line}`);
+    try {
       await octokit.pulls.createReviewComment({
         owner,
         repo,
         pull_number,
-        commit_id:commitId,
+        commit_id: commitId,
         body: comment.body,
         path: comment.path,
         line: comment.line,
       });
-    });
+    } catch (error) {
+      console.error("Error submitting comment:", comment, error);
+    }
   }
 }
 

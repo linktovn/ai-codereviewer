@@ -161,19 +161,37 @@ function getAIResponse(prompt) {
             model: OPENAI_API_MODEL,
             temperature: 0.2,
             max_tokens: 700,
+            top_p: 1,
+            frequency_penalty: 0,
+            presence_penalty: 0,
         };
         try {
+            // Log nội dung prompt gửi tới OpenAI
+            console.log("Prompt sent to OpenAI:\n", prompt);
             const response = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages: [
                     {
                         role: "system",
                         content: prompt,
                     },
                 ] }));
+            // Log phản hồi từ OpenAI trước khi xử lý
+            console.log("Response received from OpenAI:\n", response);
+            const removeMarkdown = (input) => {
+                return input.replace(/```json([\s\S]*?)```/g, '$1').trim();
+            };
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
-            return JSON.parse(res).reviews;
+            try {
+                const parsedResponse = JSON.parse(removeMarkdown(res));
+                console.log("Parsed JSON response:\n", parsedResponse); // Log phản hồi JSON đã parse
+                return parsedResponse.reviews;
+            }
+            catch (jsonError) {
+                console.error("Error parsing JSON response:", res); // Log lỗi JSON không hợp lệ
+                throw new Error(`Invalid JSON format received: ${res}`);
+            }
         }
         catch (error) {
-            console.error("Error calling OpenAI API:", error);
+            console.error("Error calling OpenAI API:", error); // Log lỗi từ OpenAI API
             return null;
         }
     });
@@ -187,14 +205,17 @@ function createComment(file, chunk, aiResponses) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
+        console.log(`Creating review comments for PR: ${pull_number}`);
+        console.log(`Number of comments: ${comments.length}`);
         const { data: commits } = yield octokit.pulls.listCommits({
-            owner: owner,
-            repo: repo,
-            pull_number: pull_number,
+            owner,
+            repo,
+            pull_number,
         });
-        const commitId = commits[commits.length - 1].sha; // ID của commit mới nhất
+        const commitId = commits[commits.length - 1].sha;
         for (const comment of comments) {
-            requestQueue.add(() => __awaiter(this, void 0, void 0, function* () {
+            console.log(`Adding comment: ${comment.body} on line ${comment.line}`);
+            try {
                 yield octokit.pulls.createReviewComment({
                     owner,
                     repo,
@@ -204,7 +225,10 @@ function createReviewComment(owner, repo, pull_number, comments) {
                     path: comment.path,
                     line: comment.line,
                 });
-            }));
+            }
+            catch (error) {
+                console.error("Error submitting comment:", comment, error);
+            }
         }
     });
 }
