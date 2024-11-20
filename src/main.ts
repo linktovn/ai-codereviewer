@@ -201,6 +201,7 @@ async function main() {
   const comments = await analyzeCode(parsedDiff, prDetails);
 
   if (comments.length > 0) {
+    console.log("analyzeCode : \n" + JSON.stringify(comments));
     await createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
   }
 }

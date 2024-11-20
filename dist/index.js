@@ -200,6 +200,7 @@ function main() {
         const parsedDiff = (0, parse_diff_1.default)(diff);
         const comments = yield analyzeCode(parsedDiff, prDetails);
         if (comments.length > 0) {
+            console.log("analyzeCode : \n" + JSON.stringify(comments));
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
         }
     });
