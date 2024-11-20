@@ -4,7 +4,6 @@ import OpenAI from "openai";
 import { Octokit } from "@octokit/rest";
 import parseDiff, { Chunk, File } from "parse-diff";
 import minimatch from "minimatch";
-import pLimit from "p-limit"; // Thêm p-limit
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -17,8 +16,6 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
 
-const limit = pLimit(5); // Giới hạn tối đa 5 request đồng thời
-
 interface PRDetails {
   owner: string;
   repo: string;
@@ -26,6 +23,37 @@ interface PRDetails {
   title: string;
   description: string;
 }
+
+/**
+ * Queue implementation to manage requests
+ */
+class RequestQueue {
+  private queue: (() => Promise<any>)[] = [];
+  private active = false;
+
+  add(request: () => Promise<any>) {
+    this.queue.push(request);
+    this.processQueue();
+  }
+
+  private async processQueue() {
+    if (this.active || this.queue.length === 0) return;
+
+    this.active = true;
+    const request = this.queue.shift();
+    if (request) {
+      try {
+        await request();
+      } catch (error) {
+        console.error("Error processing request in queue:", error);
+      }
+    }
+    this.active = false;
+    this.processQueue(); // Process the next request
+  }
+}
+
+const requestQueue = new RequestQueue();
 
 async function getPRDetails(): Promise<PRDetails> {
   const { repository, number } = JSON.parse(
@@ -76,12 +104,10 @@ async function analyzeCode(
       const prompt = createPrompt(file, chunk, prDetails);
 
       try {
-        const aiResponse = await limit(() => getAIResponse(prompt)); // Sử dụng p-limit
+        const aiResponse = await getAIResponse(prompt);
         if (aiResponse) {
           const newComments = createComment(file, chunk, aiResponse);
           comments.push(...newComments);
-        } else {
-          console.warn(`AI response is null for file: ${file.to}`);
         }
       } catch (error) {
         console.error(`Error processing file: ${file.to}, Error:`, error);
@@ -156,25 +182,25 @@ async function createReviewComment(
   comments: Array<{ body: string; path: string; line: number }>
 ): Promise<void> {
   const { data: commits } = await octokit.pulls.listCommits({
-    owner,
-    repo,
-    pull_number,
+    owner: owner,
+    repo: repo,
+    pull_number: pull_number,
   });
-  const commitId = commits[commits.length - 1].sha;
-
-  const requests = comments.map((comment) => async () =>
-    octokit.pulls.createReviewComment({
-      commit_id: commitId,
-      owner,
-      repo,
-      pull_number,
-      body: comment.body,
-      path: comment.path,
-      line: comment.line,
-    })
-  );
-
-  await Promise.all(requests.map(limit)); // Sử dụng p-limit
+  
+  const commitId = commits[commits.length - 1].sha; // ID của commit mới nhất
+  for (const comment of comments) {
+    requestQueue.add(async () => {
+      await octokit.pulls.createReviewComment({
+        owner,
+        repo,
+        pull_number,
+        commit_id:commitId,
+        body: comment.body,
+        path: comment.path,
+        line: comment.line,
+      });
+    });
+  }
 }
 
 async function main() {
@@ -185,11 +211,7 @@ async function main() {
   );
 
   if (eventData.action === "opened") {
-    diff = await getDiff(
-      prDetails.owner,
-      prDetails.repo,
-      prDetails.pull_number
-    );
+    diff = await getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
   } else if (eventData.action === "synchronize") {
     const newBaseSha = eventData.before;
     const newHeadSha = eventData.after;
@@ -206,7 +228,7 @@ async function main() {
 
     diff = String(response.data);
   } else {
-    console.log("Unsupported event:", process.env.GITHUB_EVENT_NAME);
+    console.log("Unsupported event:", eventData.action);
     return;
   }
 
@@ -216,21 +238,9 @@ async function main() {
   }
 
   const parsedDiff = parseDiff(diff);
-
-  const excludePatterns = core
-    .getInput("exclude")
-    .split(",")
-    .map((s) => s.trim());
-
-  const filteredDiff = parsedDiff.filter((file) => {
-    return !excludePatterns.some((pattern) =>
-      minimatch(file.to ?? "", pattern)
-    );
-  });
   const comments = await analyzeCode(parsedDiff, prDetails);
 
   if (comments.length > 0) {
-    console.log("analyzeCode : \n" + JSON.stringify(comments));
     await createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
   }
 }
