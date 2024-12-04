@@ -325,6 +325,7 @@ import { Octokit } from "@octokit/rest";
 import { readFileSync } from "fs";
 import OpenAI from "openai";
 import parseDiff, { Chunk, File } from "parse-diff";
+import minimatch from "minimatch";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -620,7 +621,20 @@ async function main() {
   }
 
   const parsedDiff = parseDiff(diff);
-  const comments = await analyzeCode(parsedDiff, prDetails);
+
+  const excludePatterns = core
+    .getInput("exclude")
+    .split(",")
+    .map((s) => s.trim());
+
+  const filteredDiff = parsedDiff.filter((file) => {
+    return !excludePatterns.some((pattern) =>
+      minimatch(file.to ?? "", pattern)
+    );
+  });
+
+
+  const comments = await analyzeCode(filteredDiff, prDetails);
 
   if (comments.length > 0) {
     await createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
